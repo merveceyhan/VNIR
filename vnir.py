@@ -21,7 +21,7 @@ from keras.preprocessing.text import Tokenizer
 
 
 # "AhmetAga","Bayraktar","Bezostaya" are used for wheat classification as a model
-wheats=["AhmetAga","Bayraktar","Bezostaya"]
+wheats=["AhmetAga","Bayraktar"]
 
 np_array_list = []
 
@@ -33,13 +33,12 @@ def read_wheat(wheat_name):
         
     for file in allFiles:
         df = pd.read_csv(file,names=col_names)
-        df = df.drop([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21])
+        df = df.drop([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22])
         np_array_list.append(df.values)
                         
-    comb_np_array = np.vstack(np_array_list)
-    big_frame = pd.DataFrame(comb_np_array)
+    #comb_np_array = np.vstack(np_array_list)
+    big_frame = pd.DataFrame(np_array_list)
     
-    big_frame.columns = ["Wavelength (nm)", "Absorbance (AU)", "Reference Signal (unitless)" , "Sample Signal (unitless)"]
     
     for index in range(0,len(allFiles)):
         if(wheat_name == "AhmetAga"):
@@ -48,6 +47,7 @@ def read_wheat(wheat_name):
             big_frame["Type"]=2
         if(wheat_name == "Bezostaya"):
             big_frame["Type"]=3    
+    big_frame.columns = ["Spectrum", "Type"]
     return big_frame
 
 
@@ -57,17 +57,15 @@ for i in range(0,len(wheats)):
     all_wheats=all_wheats.append(read_wheat(wheats[i]))
                        
 # save all wheats as csv file
-all_wheats.to_csv(r'BugdayOlcum_CSV\export_allwheats.csv')
+all_wheats.to_pickle('BugdayOlcum_CSV\export_allwheats.pickle')
 
 
 
 
 
 # read from csv file
-all_wheats_data = pd.read_pickle("BugdayOlcum_CSV\export_allwheats.csv")
+all_wheats = pd.read_pickle('BugdayOlcum_CSV\export_allwheats.pickle')
  
-# see file struct
-all_wheats = pd.read_csv("BugdayOlcum_CSV\export_allwheats.csv")
 print(all_wheats.head())
 print(all_wheats['Type'].value_counts())
 
@@ -76,16 +74,16 @@ print(all_wheats['Type'].value_counts())
 train, test = train_test_split(all_wheats, test_size=0.10, random_state = 5)
 
 #createx_train, x_test, y_train, y_test
-x_train= train[["Wavelength (nm)", "Absorbance (AU)", "Reference Signal (unitless)" , "Sample Signal (unitless)"]]
-x_test= test[["Wavelength (nm)", "Absorbance (AU)", "Reference Signal (unitless)" , "Sample Signal (unitless)"]]
-y_train=train[['Type']].astype(np.int64)
-y_test=test[['Type']].astype(np.int64)
+x_train= train["Spectrum"]
+x_test= test["Spectrum"]
+y_train=train['Type'].astype(np.int32)
+y_test=test['Type'].astype(np.int32)
 
 
 # define sequential model
 def get_model():
     model = Sequential()
-    model.add(Dense(512, input_shape=(4,)))
+    model.add(Dense(512, input_shape=(4,229)))
     model.add(Activation('relu'))
     model.add(Dropout(0.3))
     model.add(Dense(1))
