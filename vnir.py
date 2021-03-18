@@ -7,112 +7,170 @@ import os
 
 from numpy import mean
 from numpy import std
+
 from sklearn.datasets import make_multilabel_classification
 from sklearn.metrics import accuracy_score
-from sklearn.model_selection import RepeatedKFold
-from keras.models import Sequential
-from keras.layers import Dense
-from keras.layers import Activation
-from keras.layers import Dropout
-from sklearn.model_selection import train_test_split
-from keras.preprocessing.text import Tokenizer
+from sklearn.model_selection import RepeatedKFold,train_test_split
 
-### READ DATA
+from keras.models import Sequential
+from keras.layers import Dense,Activation,Dropout,Embedding,MaxPooling1D,Flatten,Input
+from keras.layers.convolutional import Convolution1D,AveragePooling1D,MaxPooling1D 
+from keras.layers.normalization import BatchNormalization
+from keras.layers.pooling import GlobalAveragePooling1D 
+from keras.preprocessing.text import Tokenizer
+from keras.optimizers import Adam
+
 
 
 # "AhmetAga","Bayraktar","Bezostaya" are used for wheat classification as a model
-wheats=["AhmetAga","Bayraktar"]
+wheats = ["AhmetAga","Bayraktar","Bezostaya"]
 
-np_array_list = []
 
-# read wheat files and and arrange values
+# Read wheat files and and arrange values
 def read_wheat(wheat_name):
     path = "BugdayOlcum_CSV\\"+ wheat_name
     allFiles = glob.glob(os.path.join(path,"*.csv"))
-    col_names = ["Wavelength (nm)", "Absorbance (AU)", "Reference Signal (unitless)" , "Sample Signal (unitless)"]
+    col_names = ['Reflectance (AU)']
+     
+    np_array_list = []
         
     for file in allFiles:
         df = pd.read_csv(file,names=col_names)
-        df = df.drop([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22])
+        df = df.iloc[1:]
         np_array_list.append(df.values)
-                        
-    #comb_np_array = np.vstack(np_array_list)
+
+    big_frame = pd.DataFrame()
     big_frame = pd.DataFrame(np_array_list)
     
-    
+           
     for index in range(0,len(allFiles)):
         if(wheat_name == "AhmetAga"):
-            big_frame["Type"]=1
+            big_frame["Type"] = 1
         if(wheat_name == "Bayraktar"):
-            big_frame["Type"]=2
+            big_frame["Type"] = 2
         if(wheat_name == "Bezostaya"):
-            big_frame["Type"]=3    
-    big_frame.columns = ["Spectrum", "Type"]
+            big_frame["Type"] = 3 
+            
+    big_frame.rename({0: 'Reflectance (AU)'}, axis=1, inplace=True)
+   
     return big_frame
 
 
-all_wheats=pd.DataFrame()
+all_wheats = pd.DataFrame(columns=['Reflectance (AU)', 'Type'])
 
 for i in range(0,len(wheats)):
     all_wheats=all_wheats.append(read_wheat(wheats[i]))
-                       
-# save all wheats as csv file
-all_wheats.to_pickle('BugdayOlcum_CSV\export_allwheats.pickle')
+                     
+# Save all wheats as csv file
+all_wheats.to_csv('BugdayOlcum_CSV\export_allwheats.csv', index=False)
 
+# Read from csv file
+all_wheats = pd.read_csv('BugdayOlcum_CSV\export_allwheats.csv', encoding= 'unicode_escape',delimiter = ',')
 
-
-
-
-# read from csv file
-all_wheats = pd.read_pickle('BugdayOlcum_CSV\export_allwheats.pickle')
- 
-print(all_wheats.head())
-print(all_wheats['Type'].value_counts())
-
-
-# split dataset as train and test
+# Split dataset as train and test
 train, test = train_test_split(all_wheats, test_size=0.10, random_state = 5)
 
-#createx_train, x_test, y_train, y_test
-x_train= train["Spectrum"]
-x_test= test["Spectrum"]
-y_train=train['Type'].astype(np.int32)
-y_test=test['Type'].astype(np.int32)
+# Create x_train, x_test, y_train, y_test and convert "\\n" character to comma
+x_train = pd.DataFrame(train["Reflectance (AU)"])
+x_train = x_train.iloc[1:]
+x_train = x_train.replace({'\\n ': ','}, regex=True)
+
+x_test= pd.DataFrame(test["Reflectance (AU)"])
+x_test = x_test.iloc[1:]
+x_test = x_test.replace({'\\n ': ','}, regex=True)
+
+y_train=pd.DataFrame(train['Type']).astype(np.int32)
+y_test=pd.DataFrame(test['Type']).astype(np.int32)
 
 
-# define sequential model
+clean_list = []
+data_list = []
+data_vector = []
+
+# Clean values for special characters and split 
+def Convert(string): 
+    li = list(string.split("\\n"))
+    for x in li:
+        x = x.replace("['", "")
+        x = x.replace("']", "")
+        x = x.replace("[", "")
+        x = x.replace("]", "")
+        x = x.replace("'", "") 
+        x = x.split(",")
+        clean_list.append(x)
+            
+    return clean_list 
+
+
+
+def Convert_AllData(data):
+    # Get first 1000 values from x_train for trial
+    # Then the value of 100 will be updated as "len(data)"
+    for i in range(0, 100):
+        converted_data_list = Convert(data.iat[i,0])
+        for j in range(0, len(converted_data_list)):
+            data_list.append(pd.to_numeric(converted_data_list[j]))
+        
+    for k in range(0,len(data_list)):
+        data_vector.append(list(data_list[k]))
+        
+    return data_vector
+
+# Convert x_train to dataframe for get matrix
+x_train = pd.DataFrame(Convert_AllData(x_train))
+
+# Convert x_test to dataframe for get matrix
+x_test =pd.DataFrame(Convert_AllData(x_test))
+
+
+# Define sequential model
 def get_model():
-    model = Sequential()
-    model.add(Dense(512, input_shape=(4,229)))
-    model.add(Activation('relu'))
-    model.add(Dropout(0.3))
-    model.add(Dense(1))
-    model.add(Activation('softmax'))
-    model.summary()
-    model.compile(loss='binary_crossentropy',optimizer='adam',metrics=['accuracy'])
+    model = Sequential()    
+    model.add(Embedding(input_dim=2, output_dim=25, input_length=228))
+    model.add(Convolution1D(filters=512, kernel_size=25, activation='relu', padding='same'))
+    model.add(MaxPooling1D(pool_size=5))
+    model.add(Dropout(0.5))
+    model.add(Flatten())
+    model.add(Dense(1, activation='sigmoid'))
+    model.compile(loss = "binary_crossentropy", optimizer='adam', metrics=['accuracy'])
+
+    print(model.summary())
+    print("CNN Model created.")
     return model
 
+model = get_model()
 
-yhat = get_model().predict(x_test)
+# Params 
+epochs = 10
+batch_size = 512
+seed = 7
+
+# Fit and run our model
+np.random.seed(seed)
+hist = model.fit(x_train.iloc[0:5000,:],y_train.iloc[0:5000,:],validation_data=(x_test.iloc[0:1200,:], y_test.iloc[0:1200,:]),epochs=epochs,batch_size=batch_size,shuffle = True,verbose=2)
+
+
+
+
+"""
+yhat = model.predict(x_test)
 for i in range(0, len(yhat)):
     print(yhat[i])
 
-
-num_epochs =1
-batch_size = 128
-history = get_model().fit(x_train, y_train,
-                    batch_size=batch_size,
-                    epochs=num_epochs,
-                    validation_split=0.1)
-
-
-
-
-
-"""		
-yhat = yhat.round()
-
-acc = accuracy_score(y_test, yhat)
-		
-print('>%.3f' % acc)
 """
+
+
+
+"""
+def Convert_AllData(data):
+    for i in range(0, len(x_train)):
+        converted_data_list = Convert(data.iat[i,0])
+        for j in range(0, len(converted_data_list)):
+            data_list.append(pd.to_numeric(converted_data_list[j]))
+        
+    for k in range(0,len(data_list)):
+        data_vector.append(list(data_list[k]))
+        
+    return data_vector
+"""
+    
