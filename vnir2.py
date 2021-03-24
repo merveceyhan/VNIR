@@ -23,7 +23,8 @@ from keras.optimizers import Adam
 
 
 # "AhmetAga","Bayraktar","Bezostaya" are used for wheat classification as a model
-wheats = ["AhmetAga","Bayraktar","Bezostaya","DropiTarex"]
+wheats = ["AhmetAga","Bayraktar","Bezostaya"]
+
 
 # Read wheat files and and arrange values
 def read_wheat(wheat_name):
@@ -48,9 +49,7 @@ def read_wheat(wheat_name):
         if(wheat_name == "Bayraktar"):
             big_frame["Type"] = 2
         if(wheat_name == "Bezostaya"):
-            big_frame["Type"] = 3
-        if(wheat_name == "DropiTarex"):
-            big_frame["Type"] = 4 
+            big_frame["Type"] = 3 
             
     big_frame.rename({0: 'Reflectance (AU)'}, axis=1, inplace=True)
    
@@ -61,14 +60,12 @@ all_wheats = pd.DataFrame(columns=['Reflectance (AU)', 'Type'])
 
 for i in range(0,len(wheats)):
     all_wheats=all_wheats.append(read_wheat(wheats[i]))
-
                      
 # Save all wheats as csv file
 all_wheats.to_csv('BugdayOlcum_CSV\export_allwheats.csv', index=False)
 
 # Read from csv file
 all_wheats = pd.read_csv('BugdayOlcum_CSV\export_allwheats.csv', encoding= 'unicode_escape',delimiter = ',')
-
 
 # Split dataset as train and test
 train, test = train_test_split(all_wheats, test_size=0.10, random_state = 5)
@@ -82,8 +79,8 @@ x_test= pd.DataFrame(test["Reflectance (AU)"])
 x_test = x_test.iloc[1:]
 x_test = x_test.replace({'\\n ': ','}, regex=True)
 
-y_train=pd.DataFrame(train['Type']).astype(np.int64)
-y_test=pd.DataFrame(test['Type']).astype(np.int64)
+y_train=pd.DataFrame(train['Type']).astype(np.int32)
+y_test=pd.DataFrame(test['Type']).astype(np.int32)
 
 
 clean_list = []
@@ -121,39 +118,72 @@ def Convert_AllData(data):
 
 # Convert x_train to dataframe for get matrix
 x_train = pd.DataFrame(Convert_AllData(x_train))
-print(x_train.head())
 
 # Convert x_test to dataframe for get matrix
-x_test = pd.DataFrame(Convert_AllData(x_test))
+x_test =pd.DataFrame(Convert_AllData(x_test))
 
 
 # Define sequential model
 def get_model():
-    model = Sequential()    
+    model = Sequential()
+    activation = 'relu'
     model.add(Embedding(input_dim=2, output_dim=2, input_length=228))
-    model.add(Convolution1D(512, 5, input_shape=(228,1), activation='relu'))
-    model.add(Dropout(0.5))
+    model.add(Convolution1D(128, 5, input_shape=(228,1), activation=activation))
+    model.add(AveragePooling1D())
+    model.add(BatchNormalization())
+    model.add(Dense(128, activation='sigmoid'))
+    
+    model.add(Convolution1D(128, 5, activation=activation))
+    model.add(AveragePooling1D())
+    model.add(BatchNormalization())
+    model.add(Dense(64, activation='sigmoid'))
+    
+    model.add(Convolution1D(64, 3, activation=activation))
+    model.add(AveragePooling1D())
+    model.add(BatchNormalization())
+    model.add(Dense(32, activation='sigmoid'))
+    
+    model.add(Convolution1D(64, 3, activation=activation))
+    model.add(AveragePooling1D())
+    model.add(BatchNormalization())
+    model.add(Dense(32, activation='sigmoid'))
+    
+    model.add(Convolution1D(32, 3, activation=activation))
+    model.add(AveragePooling1D())
+    model.add(BatchNormalization())
+    model.add(Dense(16, activation='sigmoid'))
+    
+    
     model.add(Flatten())
     model.add(Dense(1, activation='sigmoid'))
     model.compile(loss = "binary_crossentropy", optimizer='adam', metrics=['accuracy'])
-
+    
     print(model.summary())
     print("CNN Model created.")
+    
     return model
+
 
 model = get_model()
 
 # Params 
-epochs = 5
+epochs = 20
 batch_size = 512
 seed = 7
 
 # Fit and run our model
 np.random.seed(seed)
-hist = model.fit(x_train.iloc[0:5000,:],y_train.iloc[0:5000,:],validation_data=(x_test.iloc[0:1000,:], y_test.iloc[0:1000,:]),epochs=epochs,batch_size=batch_size,shuffle = True,verbose=2)
+hist = model.fit(x_train.iloc[0:5000,:],y_train.iloc[0:5000,:],validation_data=(x_test.iloc[0:1200,:], y_test.iloc[0:1200,:]),epochs=epochs,batch_size=batch_size,shuffle = True,verbose=2)
 
+
+
+
+"""
 yhat = model.predict(x_test)
-print(yhat)
+for i in range(0, len(yhat)):
+    print(yhat[i])
+
+"""
 
 
 
@@ -169,4 +199,4 @@ def Convert_AllData(data):
         
     return data_vector
 """
-   
+    

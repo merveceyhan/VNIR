@@ -17,13 +17,13 @@ from keras.layers import Dense,Activation,Dropout,Embedding,MaxPooling1D,Flatten
 from keras.layers.convolutional import Convolution1D,AveragePooling1D,MaxPooling1D 
 from keras.layers.normalization import BatchNormalization
 from keras.layers.pooling import GlobalAveragePooling1D 
-from keras.preprocessing.text import Tokenizer
-from keras.optimizers import Adam
+
 
 
 
 # "AhmetAga","Bayraktar","Bezostaya" are used for wheat classification as a model
 wheats = ["AhmetAga","Bayraktar","Bezostaya","DropiTarex"]
+
 
 # Read wheat files and and arrange values
 def read_wheat(wheat_name):
@@ -61,14 +61,12 @@ all_wheats = pd.DataFrame(columns=['Reflectance (AU)', 'Type'])
 
 for i in range(0,len(wheats)):
     all_wheats=all_wheats.append(read_wheat(wheats[i]))
-
                      
 # Save all wheats as csv file
 all_wheats.to_csv('BugdayOlcum_CSV\export_allwheats.csv', index=False)
 
 # Read from csv file
 all_wheats = pd.read_csv('BugdayOlcum_CSV\export_allwheats.csv', encoding= 'unicode_escape',delimiter = ',')
-
 
 # Split dataset as train and test
 train, test = train_test_split(all_wheats, test_size=0.10, random_state = 5)
@@ -82,8 +80,8 @@ x_test= pd.DataFrame(test["Reflectance (AU)"])
 x_test = x_test.iloc[1:]
 x_test = x_test.replace({'\\n ': ','}, regex=True)
 
-y_train=pd.DataFrame(train['Type']).astype(np.int64)
-y_test=pd.DataFrame(test['Type']).astype(np.int64)
+y_train=pd.DataFrame(train['Type']).astype(np.int32)
+y_test=pd.DataFrame(test['Type']).astype(np.int32)
 
 
 clean_list = []
@@ -121,52 +119,51 @@ def Convert_AllData(data):
 
 # Convert x_train to dataframe for get matrix
 x_train = pd.DataFrame(Convert_AllData(x_train))
-print(x_train.head())
 
 # Convert x_test to dataframe for get matrix
-x_test = pd.DataFrame(Convert_AllData(x_test))
+x_test =pd.DataFrame(Convert_AllData(x_test))
 
 
 # Define sequential model
 def get_model():
-    model = Sequential()    
-    model.add(Embedding(input_dim=2, output_dim=2, input_length=228))
-    model.add(Convolution1D(512, 5, input_shape=(228,1), activation='relu'))
-    model.add(Dropout(0.5))
+    model = Sequential()
+    activation = 'relu'
+    model.add(Embedding(input_dim=2, output_dim=1, input_length=228))
+    model.add(Convolution1D(128, 5, input_shape=(228,1), activation=activation))
+
+    
+    model.add(Convolution1D(128, 5, activation=activation))
+
+    
+    model.add(Convolution1D(64, 3, activation=activation))
+
+    
+    model.add(Convolution1D(64, 3, activation=activation))
+
+    
     model.add(Flatten())
     model.add(Dense(1, activation='sigmoid'))
     model.compile(loss = "binary_crossentropy", optimizer='adam', metrics=['accuracy'])
-
+    
     print(model.summary())
     print("CNN Model created.")
+    
     return model
+
 
 model = get_model()
 
 # Params 
 epochs = 5
-batch_size = 512
+batch_size = 128
 seed = 7
 
 # Fit and run our model
 np.random.seed(seed)
-hist = model.fit(x_train.iloc[0:5000,:],y_train.iloc[0:5000,:],validation_data=(x_test.iloc[0:1000,:], y_test.iloc[0:1000,:]),epochs=epochs,batch_size=batch_size,shuffle = True,verbose=2)
-
-yhat = model.predict(x_test)
-print(yhat)
+hist = model.fit(x_train.iloc[0:5000,:],y_train.iloc[0:5000,:],validation_data=(x_test.iloc[0:1200,:], y_test.iloc[0:1200,:]),epochs=epochs,batch_size=batch_size,shuffle = True,verbose=2)
 
 
 
-"""
-def Convert_AllData(data):
-    for i in range(0, len(x_train)):
-        converted_data_list = Convert(data.iat[i,0])
-        for j in range(0, len(converted_data_list)):
-            data_list.append(pd.to_numeric(converted_data_list[j]))
-        
-    for k in range(0,len(data_list)):
-        data_vector.append(list(data_list[k]))
-        
-    return data_vector
-"""
-   
+
+
+    
